@@ -372,7 +372,6 @@ def evaluate_one_epoch(test_loader, DATASET_CONFIG, CONFIG_DICT, AP_IOU_THRESHOL
     batch_gt_corner_dict = {k: [] for k in prefixes}
 
     batch_gt_horizontal_dict = {k: [] for k in prefixes}
-    collisions = 0
     for batch_idx, batch_data_label in enumerate(test_loader):
         for key in batch_data_label:
             if key == 'scan_name':
@@ -393,7 +392,6 @@ def evaluate_one_epoch(test_loader, DATASET_CONFIG, CONFIG_DICT, AP_IOU_THRESHOL
 
         loss, end_points = criterion(end_points, DATASET_CONFIG, pc_loss = config.pc_loss)
 
-        collisions = collisions + end_points['collisions']
         # Accumulate statistics and print out
         for key in end_points:
             if 'loss' in key or 'acc' in key or 'ratio' in key:
@@ -443,7 +441,6 @@ def evaluate_one_epoch(test_loader, DATASET_CONFIG, CONFIG_DICT, AP_IOU_THRESHOL
             for ihead in range(config.num_decoder_layers - 2, -1, -1):
                 logger.info(''.join([f'{key} {stat_dict[key] / (float(batch_idx + 1)):.4f} \t'
                                      for key in sorted(stat_dict.keys()) if f'{ihead}head_' in key]))
-    logger.info('collisions:{}'.format(collisions))                        
     #objects:
     mAP = 0.0
     for prefix in prefixes:
