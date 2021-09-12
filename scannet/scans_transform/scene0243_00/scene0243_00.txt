@@ -1,0 +1,17 @@
+axisAlignment = -0.139173 0.990268 0.000000 -1.268420 -0.990268 -0.139173 0.000000 2.036430 0.000000 0.000000 1.000000 -0.082351 0.000000 0.000000 0.000000 1.000000 
+colorHeight = 480
+colorWidth = 640
+depthHeight = 480
+depthWidth = 640
+fx_color = 577.870605
+fx_depth = 577.870605
+fy_color = 577.870605
+fy_depth = 577.870605
+mx_color = 319.500000
+mx_depth = 319.500000
+my_color = 239.500000
+my_depth = 239.500000
+numColorFrames = 1726
+numDepthFrames = 1726
+numIMUmeasurements = 3587
+sceneType = Bedroom / Hotel

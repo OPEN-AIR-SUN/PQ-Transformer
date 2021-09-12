@@ -1,0 +1,17 @@
+axisAlignment = -0.669131 0.743145 0.000000 0.680006 -0.743145 -0.669131 0.000000 5.569660 0.000000 0.000000 1.000000 -0.126828 0.000000 0.000000 0.000000 1.000000 
+colorHeight = 968
+colorWidth = 1296
+depthHeight = 480
+depthWidth = 640
+fx_color = 1170.187988
+fx_depth = 577.870605
+fy_color = 1170.187988
+fy_depth = 577.870605
+mx_color = 647.750000
+mx_depth = 319.500000
+my_color = 483.750000
+my_depth = 239.500000
+numColorFrames = 2027
+numDepthFrames = 2027
+numIMUmeasurements = 4268
+sceneType = Kitchen

@@ -1,0 +1,17 @@
+axisAlignment = -0.190809 0.981627 0.000000 -1.130600 -0.981627 -0.190809 0.000000 3.093030 0.000000 0.000000 1.000000 -0.074128 0.000000 0.000000 0.000000 1.000000 
+colorHeight = 480
+colorWidth = 640
+depthHeight = 480
+depthWidth = 640
+fx_color = 577.870605
+fx_depth = 578.000000
+fy_color = 577.870605
+fy_depth = 578.000000
+mx_color = 319.500000
+mx_depth = 319.500000
+my_color = 239.500000
+my_depth = 239.500000
+numColorFrames = 991
+numDepthFrames = 991
+numIMUmeasurements = 2079
+sceneType = Office

@@ -1,0 +1,17 @@
+axisAlignment = 0.173648 0.984808 0.000000 -2.733370 -0.984808 0.173648 0.000000 3.066620 0.000000 0.000000 1.000000 -0.052146 0.000000 0.000000 0.000000 1.000000 
+colorHeight = 480
+colorWidth = 640
+depthHeight = 480
+depthWidth = 640
+fx_color = 577.870605
+fx_depth = 577.870605
+fy_color = 577.870605
+fy_depth = 577.870605
+mx_color = 319.500000
+mx_depth = 319.500000
+my_color = 239.500000
+my_depth = 239.500000
+numColorFrames = 1026
+numDepthFrames = 1026
+numIMUmeasurements = 2152
+sceneType = Conference Room

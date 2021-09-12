@@ -1,0 +1,17 @@
+axisAlignment = -0.963630 0.267238 0.000000 1.326510 -0.267238 -0.963630 0.000000 2.863530 0.000000 0.000000 1.000000 -0.070221 0.000000 0.000000 0.000000 1.000000 
+colorHeight = 968
+colorWidth = 1296
+depthHeight = 480
+depthWidth = 640
+fx_color = 1170.187988
+fx_depth = 577.870605
+fy_color = 1170.187988
+fy_depth = 577.870605
+mx_color = 647.750000
+mx_depth = 319.500000
+my_color = 483.750000
+my_depth = 239.500000
+numColorFrames = 4500
+numDepthFrames = 4500
+numIMUmeasurements = 8995
+sceneType = Living room / Lounge

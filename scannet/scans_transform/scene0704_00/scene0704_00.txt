@@ -1,0 +1,17 @@
+axisAlignment = -0.267238 0.963630 0.000000 -2.297100 -0.963630 -0.267238 0.000000 3.631230 0.000000 0.000000 1.000000 -0.108627 0.000000 0.000000 0.000000 1.000000 
+colorHeight = 480
+colorWidth = 640
+depthHeight = 480
+depthWidth = 640
+fx_color = 577.870605
+fx_depth = 577.870605
+fy_color = 577.870605
+fy_depth = 577.870605
+mx_color = 319.500000
+mx_depth = 319.500000
+my_color = 239.500000
+my_depth = 239.500000
+numColorFrames = 2409
+numDepthFrames = 2409
+numIMUmeasurements = 5037
+sceneType = Copy/Mail Room

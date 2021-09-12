@@ -1,0 +1,17 @@
+axisAlignment = 0.366501 0.930418 0.000000 -1.995430 -0.930418 0.366501 0.000000 0.776881 0.000000 0.000000 1.000000 -0.034626 0.000000 0.000000 0.000000 1.000000 
+colorHeight = 968
+colorWidth = 1296
+depthHeight = 480
+depthWidth = 640
+fx_color = 1170.187988
+fx_depth = 577.870605
+fy_color = 1170.187988
+fy_depth = 577.870605
+mx_color = 647.750000
+mx_depth = 319.500000
+my_color = 483.750000
+my_depth = 239.500000
+numColorFrames = 654
+numDepthFrames = 654
+numIMUmeasurements = 1363
+sceneType = Bathroom
