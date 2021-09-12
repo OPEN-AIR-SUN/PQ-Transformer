@@ -277,10 +277,6 @@ def main(args):
             # save model
             save_checkpoint(args, epoch, model, optimizer, scheduler)
     
-        if dist.get_rank() == 0:
-            # save model
-            save_checkpoint(args, epoch, model, optimizer, scheduler)
-
     evaluate_one_epoch(test_loader, DATASET_CONFIG, CONFIG_DICT, args.ap_iou_thresholds, model, criterion, args)
     save_checkpoint(args, 'last', model, optimizer, scheduler, save_cur=True)
     logger.info("Saved in {}".format(os.path.join(args.log_dir, f'ckpt_epoch_last.pth')))
