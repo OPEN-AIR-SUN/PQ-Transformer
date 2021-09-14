@@ -1,4 +1,7 @@
 # PQ-Transformer: Jointly Parsing 3D Objects and Layouts from Point Clouds
+
+[**Paper**](https://arxiv.org/abs/2109.05566) 
+
 Created by Xiaoxue Chen, Hao Zhao, Guyue Zhou and Ya-Qin Zhang from <a href="http://air.tsinghua.edu.cn/EN/" target="_blank">Institute for AI Industry Research(AIR), Tsinghua University</a>.
 
 ![teaser](doc/teaser.PNG)
@@ -26,6 +29,14 @@ In this repository, we propose the first transformer architecture that predicts 
 
 If you find our work useful in your research, please consider citing:
 
+@misc{chen2021pqtransformer,
+      title={PQ-Transformer: Jointly Parsing 3D Objects and Layouts from Point Clouds}, 
+      author={Xiaoxue Chen and Hao Zhao and Guyue Zhou and Ya-Qin Zhang},
+      year={2021},
+      eprint={2109.05566},
+      archivePrefix={arXiv},
+      primaryClass={cs.CV}
+}
 
 
 ## Installation

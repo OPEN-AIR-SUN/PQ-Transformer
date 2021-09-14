@@ -473,6 +473,7 @@ def evaluate_one_epoch(test_loader, DATASET_CONFIG, CONFIG_DICT, AP_IOU_THRESHOL
         for i, ap_calculator in enumerate(quad_ap_calculator_list):
             metrics_dict = ap_calculator.compute_metrics()
             f1 = ap_calculator.compute_F1()
+            logger.info(f'=====================>Layout Estimation<=====================')
             logger.info(f'F1 scores: {f1}')
             # logger.info(f'=====================>{prefix} IOU THRESH: {AP_IOU_THRESHOLDS[i]}<=====================')
             # for key in metrics_dict:
