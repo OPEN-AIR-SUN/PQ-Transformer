@@ -29,13 +29,11 @@ In this repository, we propose the first transformer architecture that predicts 
 
 If you find our work useful in your research, please consider citing:
 
-    @misc{chen2021pqtransformer,
-          title={PQ-Transformer: Jointly Parsing 3D Objects and Layouts from Point Clouds}, 
-          author={Xiaoxue Chen and Hao Zhao and Guyue Zhou and Ya-Qin Zhang},
-          year={2021},
-          eprint={2109.05566},
-          archivePrefix={arXiv},
-          primaryClass={cs.CV}
+    @article{chen2021pq,
+    title={PQ-Transformer: Jointly Parsing 3D Objects and Layouts from Point Clouds},
+    author={Chen, Xiaoxue and Zhao, Hao and Zhou, Guyue and Zhang, Ya-Qin},
+    journal={arXiv preprint arXiv:2109.05566},
+    year={2021}
     }
 
 
