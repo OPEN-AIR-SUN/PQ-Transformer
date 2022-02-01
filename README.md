@@ -2,6 +2,8 @@
 
 [**Paper**](https://arxiv.org/abs/2109.05566) 
 
+Accepted to RA-L & ICRA 2022.
+
 Created by Xiaoxue Chen, Hao Zhao, Guyue Zhou and Ya-Qin Zhang from <a href="http://air.tsinghua.edu.cn/EN/" target="_blank">Institute for AI Industry Research(AIR), Tsinghua University</a>.
 
 ![teaser](doc/teaser.PNG)
@@ -29,11 +31,12 @@ In this repository, we propose the first transformer architecture that predicts 
 
 If you find our work useful in your research, please consider citing:
 
-    @article{chen2021pq,
-    title={PQ-Transformer: Jointly Parsing 3D Objects and Layouts from Point Clouds},
-    author={Chen, Xiaoxue and Zhao, Hao and Zhou, Guyue and Zhang, Ya-Qin},
-    journal={arXiv preprint arXiv:2109.05566},
-    year={2021}
+    @article{chen2022pq,
+      title={Pq-transformer: Jointly parsing 3d objects and layouts from point clouds},
+      author={Chen, Xiaoxue and Zhao, Hao and Zhou, Guyue and Zhang, Ya-Qin},
+      journal={IEEE Robotics and Automation Letters},
+      year={2022},
+      publisher={IEEE}
     }
 
 
