@@ -1,0 +1,7 @@
+matplotlib
+opencv-python
+tensorboard
+termcolor
+plyfile
+trimesh>=2.35.39
+networkx>=2.2

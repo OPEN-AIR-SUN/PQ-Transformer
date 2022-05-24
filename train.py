@@ -287,6 +287,9 @@ def train_one_epoch(epoch, train_loader, DATASET_CONFIG, model, criterion, optim
     stat_dict = {}  # collect statistics
     model.train()  # set model to training mode
     for batch_idx, batch_data_label in enumerate(train_loader):
+
+        IPython.embed()
+
         for key in batch_data_label:
             if key == 'scan_name':
                 continue

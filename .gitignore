@@ -1,0 +1,11 @@
+log/
+pretrained_model/
+journal.md
+__pycache__/
+pointnet2/build/
+pointnet2/dist/
+pointnet2/pointnet2.egg-info/
+scannet/scannet_planes/
+scannet/scannet_train_detection_data/
+.idea/
+
