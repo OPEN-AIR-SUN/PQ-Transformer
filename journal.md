@@ -12,6 +12,12 @@
 + 训了 600 个 Epoch（2022-5-23 11:01:31）
   + 结果：/home/gaoha/PQ-Transformer/log/pq-transformer/scannet_1653274960/91571465/log.txt
 
-[2022-5-24 15:16:47]
+[2022-5-24 16:16:47]
 + 开始读 Code Base
-+ 
+  + 搞清：ScanNet 数据集的格式是什么？DataLoader 是如何对其包装的？
+    + 撰写减量版本。（2022-5-24 16:49:28）
+    + 测试在同一种子下产生 Splitted 的数据集的函数是不是纯函数。（PASSED, 2022-5-24 17:12:25）
+    + `CUDA_VISIBLE_DEVICES=2 python3 -m torch.distributed.launch --nproc_per_node=1 TEST_dataloader_splitted.py`
+  + 阅读 `train.py`，修改数据集加载逻辑（2022-5-24 17:12:49）
+  + 让减量版本的代码运行起来（2022-5-24 17:15:17）
+  + 继续阅读 `train.py` 与其他文件内容，model 的输入、输出格式分别是什么？loss 在哪里定义？如何修改权重？

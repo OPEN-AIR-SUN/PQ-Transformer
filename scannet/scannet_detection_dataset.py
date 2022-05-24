@@ -9,8 +9,11 @@ An axis aligned bounding box is parameterized by (cx,cy,cz) and (dx,dy,dz)
 where (cx,cy,cz) is the center point of the box, dx is the x-axis length of the box.
 """
 import os
+import random
 import sys
 import json
+
+import IPython
 import numpy as np
 from torch.utils.data import Dataset
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -34,10 +37,12 @@ MEAN_COLOR_RGB = np.array([109.8, 97.2, 83.8])
 class ScannetDetectionDataset(Dataset):
        
     def __init__(self, split_set='train', num_points=40000,
-        use_color=False, use_height=False, augment=False):
+        use_color=False, use_height=False, augment=False,
+                 start_proportion=0.0, end_proportion=1.0,):
 
         self.data_path = os.path.join(BASE_DIR, 'scannet_train_detection_data')
         self.data_path_with_planes = os.path.join(BASE_DIR, 'scannet_planes')
+
         all_scan_names = list(set([os.path.basename(x)[0:12] \
             for x in os.listdir(self.data_path_with_planes) if x.startswith('scene')]))
         if split_set=='all':            
@@ -45,14 +50,22 @@ class ScannetDetectionDataset(Dataset):
         elif split_set in ['train', 'val', 'test']:
             split_filenames = os.path.join(ROOT_DIR, 'scannet/meta_data',
                 'scannetv2_{}.txt'.format(split_set))
+
+            # TODO: Change this to splitted
             with open(split_filenames, 'r') as f:
-                self.scan_names = f.read().splitlines()   
+                self.scan_names = f.read().splitlines()
+
+            # Here change the dataset to splitted
+            random.shuffle(self.scan_names)
+            start_idx = int(len(self.scan_names) * start_proportion)
+            end_idx = int(len(self.scan_names) * end_proportion)
+            self.scan_names = self.scan_names[start_idx:end_idx]
+
             # remove unavailiable scans
             num_scans = len(self.scan_names)
             self.scan_names = [sname for sname in self.scan_names \
                 if sname in all_scan_names]
             print('kept {} scans out of {}'.format(len(self.scan_names), num_scans))
-            num_scans = len(self.scan_names)
         else:
             print('illegal split name')
             return
@@ -81,7 +94,7 @@ class ScannetDetectionDataset(Dataset):
             scan_idx: int scan index in scan_names list
             pcl_color: unused
         """
-        
+
         scan_name = self.scan_names[idx]        
         mesh_vertices = np.load(os.path.join(self.data_path, scan_name)+'_vert.npy')
         instance_labels = np.load(os.path.join(self.data_path, scan_name)+'_ins_label.npy')

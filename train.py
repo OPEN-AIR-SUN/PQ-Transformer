@@ -1,4 +1,7 @@
 from ast import dump
+
+import IPython
+
 from models.dump_helper import dump_results
 from models.dump_helper_quad import dump_results_quad
 
@@ -50,6 +53,10 @@ def parse_option():
     parser.add_argument('--use_height', action='store_true', help='Use height signal in input.')
     parser.add_argument('--use_color', action='store_true', help='Use RGB color in input.')
     parser.add_argument('--num_workers', type=int, default=4, help='num of workers to use')
+
+    # Dataset Splitting
+    parser.add_argument('--start_proportion', default=0.0, type=float, help='Start proportion of the dataset')
+    parser.add_argument('--end_proportion', default=1.0, type=float, help='End proportion of the dataset')
 
     # Training
     parser.add_argument('--start_epoch', type=int, default=1, help='Epoch to run [default: 1]')
@@ -166,7 +173,9 @@ def get_loader(args):
         TRAIN_DATASET = ScannetDetectionDataset('train', num_points=args.num_point,
                                                 augment=True,
                                                 use_color=True if args.use_color else False,
-                                                use_height=True if args.use_height else False)
+                                                use_height=True if args.use_height else False,
+                                                start_proportion=args.start_proportion,
+                                                end_proportion=args.end_proportion,)
 
         TEST_DATASET = ScannetDetectionDataset('val', num_points=args.num_point,
                                                augment=False,
@@ -287,8 +296,6 @@ def train_one_epoch(epoch, train_loader, DATASET_CONFIG, model, criterion, optim
     stat_dict = {}  # collect statistics
     model.train()  # set model to training mode
     for batch_idx, batch_data_label in enumerate(train_loader):
-
-        IPython.embed()
 
         for key in batch_data_label:
             if key == 'scan_name':
