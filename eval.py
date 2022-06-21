@@ -1,4 +1,7 @@
 from ast import dump
+
+import IPython
+
 from models.dump_helper import dump_results
 from models.dump_helper_quad import dump_results_quad
 
@@ -285,6 +288,9 @@ def evaluate_one_epoch(test_loader, DATASET_CONFIG, CONFIG_DICT, AP_IOU_THRESHOL
 
     batch_gt_horizontal_dict = {k: [] for k in prefixes}
     for batch_idx, batch_data_label in enumerate(test_loader):
+
+        IPython.embed(header="eval one epoch")
+
         for key in batch_data_label:
             if key == 'scan_name':
                 continue
@@ -409,7 +415,7 @@ def evaluate_one_epoch(test_loader, DATASET_CONFIG, CONFIG_DICT, AP_IOU_THRESHOL
 if __name__ == '__main__':
     opt = parse_option()
     
-    torch.cuda.set_device(opt.local_rank)
+    torch.cuda.set_device(opt.local_rank if opt.local_rank else 0)
     torch.distributed.init_process_group(backend='nccl', init_method='env://')
     initiate_environment(opt)
     torch.backends.cudnn.enabled = True

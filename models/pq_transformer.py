@@ -1,3 +1,4 @@
+import IPython
 import torch
 import torch.nn.functional as F
 from torch import nn
@@ -190,20 +191,24 @@ class PQ_Transformer(nn.Module):
         nn.SyncBatchNorm.convert_sync_batchnorm(self)
 
     def forward(self, inputs):
+
         end_points = {}
 
+        # Backbone
         end_points = self.backbone(inputs['point_clouds'], end_points)
         points_xyz = end_points['fp2_xyz']
         points_features = end_points['fp2_features']
         seed_xyz = end_points['fp2_xyz']
         seed_features = end_points['fp2_features']
 
+        # Layout estimation: FPS
         xyz, features, sample_inds = self.fps_module(seed_xyz, seed_features)
         quad_cluster_feature = features
         quad_cluster_xyz = xyz
         end_points['aggregated_sample_xyz'] = xyz
         
         if self.sampling == 'vote':
+            # Object detection: voting
             xyz, features = self.vote(seed_xyz, seed_features)
             features_norm = torch.norm(features, p=2, dim=1)
             features = features.div(features_norm.unsqueeze(1))

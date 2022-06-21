@@ -51,15 +51,8 @@ class ScannetDetectionDataset(Dataset):
             split_filenames = os.path.join(ROOT_DIR, 'scannet/meta_data',
                 'scannetv2_{}.txt'.format(split_set))
 
-            # TODO: Change this to splitted
             with open(split_filenames, 'r') as f:
                 self.scan_names = f.read().splitlines()
-
-            # Here change the dataset to splitted
-            random.shuffle(self.scan_names)
-            start_idx = int(len(self.scan_names) * start_proportion)
-            end_idx = int(len(self.scan_names) * end_proportion)
-            self.scan_names = self.scan_names[start_idx:end_idx]
 
             # remove unavailiable scans
             num_scans = len(self.scan_names)
@@ -74,7 +67,9 @@ class ScannetDetectionDataset(Dataset):
         self.use_color = use_color        
         self.use_height = use_height
         self.augment = augment
-       
+
+
+
     def __len__(self):
         return len(self.scan_names)
 
@@ -94,6 +89,7 @@ class ScannetDetectionDataset(Dataset):
             scan_idx: int scan index in scan_names list
             pcl_color: unused
         """
+
 
         scan_name = self.scan_names[idx]        
         mesh_vertices = np.load(os.path.join(self.data_path, scan_name)+'_vert.npy')  # 6 channels, XYZRGB
@@ -190,7 +186,8 @@ class ScannetDetectionDataset(Dataset):
         size_classes[0:instance_bboxes.shape[0]] = class_ind
         size_residuals[0:instance_bboxes.shape[0], :] = \
             target_bboxes[0:instance_bboxes.shape[0], 3:6] - DC.mean_size_arr[class_ind,:]
-        size_gts[0:instance_bboxes.shape[0], :] = target_bboxes[0:instance_bboxes.shape[0], 3:6]    
+        size_gts[0:instance_bboxes.shape[0], :] = target_bboxes[0:instance_bboxes.shape[0], 3:6]
+
         ret_dict = {}
         ret_dict['point_clouds'] = point_cloud.astype(np.float32)
         ret_dict['center_label'] = target_bboxes.astype(np.float32)[:,0:3]
