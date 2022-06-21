@@ -305,12 +305,23 @@ def train_one_epoch(epoch, train_loader, DATASET_CONFIG, model, criterion, optim
 
         # Randomly pick 10% of the data in range(self.num_points)
         bs = batch_data_label['point_clouds'].shape[0]
-        # TODO: what if we use FPS to pick 10% of the data?
-        labelled_indices = np.stack([np.random.choice(train_loader.dataset.num_points, \
-                                                      int(train_loader.dataset.num_points * 0.1), replace=False)
-                                    for b in range(bs)])
-        unlabelled_indices = np.stack([np.setdiff1d(np.arange(train_loader.dataset.num_points), labelled_indices[b])
-                                       for b in range(bs)])
+
+        labelled_indices, unlabelled_indices = [], []
+
+        for b in range(bs):
+            scene_idx = int(batch_data_label['scan_name'][b][5:9])
+            np.random.seed(scene_idx * scene_idx + 3)  # f: scene_idx -> random seed, for reproducing the results later
+            # TODO: what if we use FPS to pick 10% of the data?
+            labelled_indices.append(
+                np.random.choice(train_loader.dataset.num_points, \
+                                 int(train_loader.dataset.num_points * 0.1), replace=False)
+            )
+            unlabelled_indices.append(
+                np.setdiff1d(np.arange(train_loader.dataset.num_points), labelled_indices[b])
+            )
+
+        labelled_indices = np.stack(labelled_indices)
+        unlabelled_indices = np.stack(unlabelled_indices)
 
         former_point_clouds = batch_data_label['point_clouds']
         inputs = {'point_clouds': torch.stack([former_point_clouds[b][labelled_indices[b], :] for b in range(bs)])}
