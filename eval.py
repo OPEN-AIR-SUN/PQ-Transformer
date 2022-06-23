@@ -1,4 +1,7 @@
 from ast import dump
+
+import matplotlib.pyplot as plt
+
 from models.dump_helper import dump_results
 from models.dump_helper_quad import dump_results_quad
 
@@ -285,6 +288,7 @@ def evaluate_one_epoch(test_loader, DATASET_CONFIG, CONFIG_DICT, AP_IOU_THRESHOL
 
     batch_gt_horizontal_dict = {k: [] for k in prefixes}
     for batch_idx, batch_data_label in enumerate(test_loader):
+
         for key in batch_data_label:
             if key == 'scan_name':
                 continue
@@ -294,8 +298,6 @@ def evaluate_one_epoch(test_loader, DATASET_CONFIG, CONFIG_DICT, AP_IOU_THRESHOL
         # Forward pass
         inputs = {'point_clouds': batch_data_label['point_clouds']}
         with torch.no_grad():
-        
-
             end_points = model(inputs)
 
         # Compute loss
@@ -334,6 +336,50 @@ def evaluate_one_epoch(test_loader, DATASET_CONFIG, CONFIG_DICT, AP_IOU_THRESHOL
             batch_gt_horizontal_dict[prefix].append(end_points['horizontal_quads']) 
 
             end_points['pred_quad_mask']=pred_quad_mask
+
+            # === Distance Loss ===
+            for b in range(end_points['point_clouds'].shape[0]):
+                pc_scene = end_points['point_clouds'][b]
+
+                predicted_quads = batch_pred_quad_corner[b]
+
+                # Filter out all points inside predicted quads
+
+                for predicted_quad in predicted_quads:
+                    lower_bound = np.min(predicted_quad, axis=0)
+                    upper_bound = np.max(predicted_quad, axis=0)
+
+                    outside = np.zeros(shape=(pc_scene.shape[0], ))
+
+                    for i in range(3):
+                        outside[torch.logical_or(pc_scene[:, i] < lower_bound[i], upper_bound[i] < pc_scene[:, i]).cpu().numpy()] = 1
+
+                    # pc_scene: (#num_points, 3) -> (#num_points_not_in_predicted_quad, 3)
+                    pc_scene = pc_scene[np.argwhere(outside > 0).reshape(-1), :]
+
+
+
+                pc_center = torch.mean(pc_scene, dim=0).cpu().numpy()  # To find the inner side of the point clouds
+
+                distance = 10.0 + np.zeros(shape=(pc_scene.shape[0], ))
+                # Calculate distances
+                for predicted_quad in predicted_quads:
+                    quad_center = np.mean(predicted_quad, axis=0)
+                    predicted_quad_norm = np.cross(predicted_quad[1] - predicted_quad[0], predicted_quad[2] - predicted_quad[0])
+                    predicted_quad_norm = predicted_quad_norm / np.linalg.norm(predicted_quad_norm)
+
+                    if np.dot(pc_center - quad_center, predicted_quad_norm) > 0:
+                        predicted_quad_norm = -predicted_quad_norm  # Make inner distance < 0 and outsider > 0
+
+                    new_distance = np.dot(pc_scene.cpu().numpy() - quad_center, predicted_quad_norm)
+
+                    distance[(np.abs(new_distance) < np.abs(distance))] = new_distance[(np.abs(new_distance) < np.abs(distance))]
+
+
+                plt.cla()
+                plt.hist(distance, bins=100, color='g', alpha=0.5)
+                plt.savefig(f'statistics/distribution-{end_points["scan_idx"][b].item()}.png')
+
             
             if config.dump_result:
                 print("dumping...")
@@ -355,6 +401,7 @@ def evaluate_one_epoch(test_loader, DATASET_CONFIG, CONFIG_DICT, AP_IOU_THRESHOL
             for ihead in range(config.num_decoder_layers - 2, -1, -1):
                 logger.info(''.join([f'{key} {stat_dict[key] / (float(batch_idx + 1)):.4f} \t'
                                      for key in sorted(stat_dict.keys()) if f'{ihead}head_' in key]))
+
     #objects:
     mAP = 0.0
     for prefix in prefixes:
@@ -409,7 +456,7 @@ def evaluate_one_epoch(test_loader, DATASET_CONFIG, CONFIG_DICT, AP_IOU_THRESHOL
 if __name__ == '__main__':
     opt = parse_option()
     
-    torch.cuda.set_device(opt.local_rank)
+    torch.cuda.set_device(opt.local_rank if opt.local_rank else 0)
     torch.distributed.init_process_group(backend='nccl', init_method='env://')
     initiate_environment(opt)
     torch.backends.cudnn.enabled = True

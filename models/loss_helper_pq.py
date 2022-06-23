@@ -38,6 +38,7 @@ def compute_vote_loss(end_points):
     dist1, _, dist2, _ = nn_distance(vote_xyz_reshape, seed_gt_votes_reshape, l1=True)
     votes_dist, _ = torch.min(dist2, dim=1) # (B*num_seed,vote_factor) to (B*num_seed,)
     votes_dist = votes_dist.view(batch_size, num_seed)
+    # If votes in bounding box, then minimize its distance to the ground truth
     vote_loss = torch.sum(votes_dist*seed_gt_votes_mask.float())/(torch.sum(seed_gt_votes_mask.float())+1e-6)
     return vote_loss
 
@@ -224,7 +225,7 @@ def compute_quad_score_loss(end_points,num_layer = 6):
         # Compute quad scores loss
         quad_scores = end_points[f'{prefix}quad_scores']
         criterion = nn.CrossEntropyLoss(torch.Tensor(QUAD_CLS_WEIGHTS).cuda(), reduction='none')
-        quad_scores_loss = criterion(quad_scores.transpose(2,1), quad_label)
+        quad_scores_loss = criterion(quad_scores.transpose(2,1), quad_label)  # Calc binary classification loss per "quad" to decide if it is a quad
         quad_scores_loss = torch.sum(quad_scores_loss * quad_mask)/(torch.sum(quad_mask)+1e-6)
 
         end_points[f'{prefix}quad_scores_loss'] = quad_scores_loss
@@ -243,6 +244,7 @@ def compute_quad_loss(end_points, config,num_layer = 6):
     prefixes = ['proposal_'] + ['last_'] + [f'{i}head_' for i in range(num_layer-1)]
     for prefix in prefixes:
         quad_assignment = end_points[f'{prefix}quad_assignment']
+        # To decide if a prediction is considered as a quad or not
         quad_label = end_points[f'{prefix}quad_label'].float()
         B = quad_assignment.shape[0]
         K = quad_assignment.shape[1]
@@ -308,7 +310,7 @@ def projection2d(point,center,normal_vector,size):
     b = normal_vector[1]
     d = -(a*center[0]+b*center[1])
 
-    k = -(a*point[:,0]+b*point[:,1]+d)
+    k = -(a*point[:,0]+b*point[:,1]+d) # k = -delta, k < 0 indicates the point is inside the quads
 
     x = point[:,0]+a*k
     y = point[:,1]+b*k
@@ -408,6 +410,8 @@ def get_loss(end_points, config,query_points_obj_topk=5,pc_loss=True,num_layer =
         loss: pytorch scalar tensor
         end_points: dict
     """
+
+
     if  'vote_xyz' in end_points.keys():
         vote_loss = compute_vote_loss(end_points)
     else:
@@ -436,7 +440,7 @@ def get_loss(end_points, config,query_points_obj_topk=5,pc_loss=True,num_layer =
 
     quad_loss_sum = quad_center_loss_sum + quad_vector_loss_sum + quad_size_loss_sum
     end_points['quad_loss_sum'] = quad_loss_sum
-    
+
     #pc loss
     if pc_loss:
         pc_loss,collisions = compute_physical_constraints_loss(end_points,config)

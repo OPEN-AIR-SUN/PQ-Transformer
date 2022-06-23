@@ -2,7 +2,7 @@ import numpy as np
 import scipy.io as sio 
 
 def in_hull(p, hull):
-    from scipy.spatial import Delaunay
+    from scipy.spatial import Delaunay  # Create a mesh with points
     if not isinstance(hull,Delaunay):
         hull = Delaunay(hull)
     return hull.find_simplex(p)>=0
