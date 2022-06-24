@@ -339,7 +339,9 @@ def evaluate_one_epoch(test_loader, DATASET_CONFIG, CONFIG_DICT, AP_IOU_THRESHOL
 
             # === Distance Loss ===
             for b in range(end_points['point_clouds'].shape[0]):
+
                 pc_scene = end_points['point_clouds'][b]
+                semantic_labels = end_points['semantic_labels'][b]
 
                 predicted_quads = batch_pred_quad_corner[b]
 
@@ -355,8 +357,7 @@ def evaluate_one_epoch(test_loader, DATASET_CONFIG, CONFIG_DICT, AP_IOU_THRESHOL
                         outside[torch.logical_or(pc_scene[:, i] < lower_bound[i], upper_bound[i] < pc_scene[:, i]).cpu().numpy()] = 1
 
                     # pc_scene: (#num_points, 3) -> (#num_points_not_in_predicted_quad, 3)
-                    pc_scene = pc_scene[np.argwhere(outside > 0).reshape(-1), :]
-
+                    # pc_scene = pc_scene[np.argwhere(outside > 0).reshape(-1), :]
 
 
                 pc_center = torch.mean(pc_scene, dim=0).cpu().numpy()  # To find the inner side of the point clouds
@@ -372,13 +373,30 @@ def evaluate_one_epoch(test_loader, DATASET_CONFIG, CONFIG_DICT, AP_IOU_THRESHOL
                         predicted_quad_norm = -predicted_quad_norm  # Make inner distance < 0 and outsider > 0
 
                     new_distance = np.dot(pc_scene.cpu().numpy() - quad_center, predicted_quad_norm)
-
+                    # Use Dynamic programming to find the "nearest" quad with minimum absolute error :)
                     distance[(np.abs(new_distance) < np.abs(distance))] = new_distance[(np.abs(new_distance) < np.abs(distance))]
 
+                # distance = np.abs(distance)
+                layout_categories = (1, 8, 9,)
+                distance_wall = distance[np.isin(semantic_labels.cpu().numpy(), layout_categories)]
+                d2c = lambda d: ((128 + min(1, abs(d)) * 127) / 255, (255 - min(1, abs(d)) * 127) / 255, 1.)
+                with open(f'statistics/distance-{end_points["scan_idx"][b].item()}.txt', 'w') as f:
+                    for i in range(len(pc_scene)):
+                        if semantic_labels[i] in layout_categories:
+                            color = d2c(distance[i])
+                            # color = (255,255,255)
+                        else:
+                            color = (64 / 256, 64 / 256, 64 / 256)
+                        print(f"{pc_scene[i][0]} {pc_scene[i][1]} {pc_scene[i][2]} {color[0]} {color[1]} {color[2]}", file=f)
 
-                plt.cla()
-                plt.hist(distance, bins=100, color='g', alpha=0.5)
-                plt.savefig(f'statistics/distribution-{end_points["scan_idx"][b].item()}.png')
+                import matplotlib
+                matplotlib.use('Agg')
+
+                plt.clf()
+                plt.hist(distance_wall, bins=100, color='g', alpha=0.5)
+                plt.savefig(f'statistics/distribution-{end_points["scan_name"][b][5:9]}.png')
+
+                dump_results_quad(end_points, os.path.join(ROOT_DIR, f"statistics/display-{end_points['scan_name'][b][5:9]}"), DATASET_CONFIG)
 
             
             if config.dump_result:

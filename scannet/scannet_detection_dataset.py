@@ -95,7 +95,7 @@ class ScannetDetectionDataset(Dataset):
             pcl_color: unused
         """
 
-        scan_name = self.scan_names[idx]        
+        scan_name = self.scan_names[idx]
         mesh_vertices = np.load(os.path.join(self.data_path, scan_name)+'_vert.npy')  # 6 channels, XYZRGB
         instance_labels = np.load(os.path.join(self.data_path, scan_name)+'_ins_label.npy')  # 1-#instance
         semantic_labels = np.load(os.path.join(self.data_path, scan_name)+'_sem_label.npy')  # nyu40 ids
@@ -193,6 +193,7 @@ class ScannetDetectionDataset(Dataset):
         size_gts[0:instance_bboxes.shape[0], :] = target_bboxes[0:instance_bboxes.shape[0], 3:6]    
         ret_dict = {}
         ret_dict['point_clouds'] = point_cloud.astype(np.float32)
+        ret_dict['semantic_labels'] = semantic_labels.astype(np.int32)
         ret_dict['center_label'] = target_bboxes.astype(np.float32)[:,0:3]
         ret_dict['heading_class_label'] = angle_classes.astype(np.int64)
         ret_dict['heading_residual_label'] = angle_residuals.astype(np.float32)
