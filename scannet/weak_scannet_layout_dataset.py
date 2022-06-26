@@ -13,7 +13,6 @@ import random
 import sys
 import json
 
-import IPython
 import numpy as np
 from torch.utils.data import Dataset
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))

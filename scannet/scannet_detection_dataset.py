@@ -13,8 +13,8 @@ import random
 import sys
 import json
 
-import IPython
 import numpy as np
+import numpy.random
 from torch.utils.data import Dataset
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 ROOT_DIR = os.path.dirname(BASE_DIR)
@@ -95,7 +95,7 @@ class ScannetDetectionDataset(Dataset):
             pcl_color: unused
         """
 
-        scan_name = self.scan_names[idx]        
+        scan_name = self.scan_names[idx]
         mesh_vertices = np.load(os.path.join(self.data_path, scan_name)+'_vert.npy')  # 6 channels, XYZRGB
         instance_labels = np.load(os.path.join(self.data_path, scan_name)+'_ins_label.npy')  # 1-#instance
         semantic_labels = np.load(os.path.join(self.data_path, scan_name)+'_sem_label.npy')  # nyu40 ids
@@ -193,6 +193,7 @@ class ScannetDetectionDataset(Dataset):
         size_gts[0:instance_bboxes.shape[0], :] = target_bboxes[0:instance_bboxes.shape[0], 3:6]    
         ret_dict = {}
         ret_dict['point_clouds'] = point_cloud.astype(np.float32)
+        ret_dict['semantic_labels'] = semantic_labels.astype(np.int32)
         ret_dict['center_label'] = target_bboxes.astype(np.float32)[:,0:3]
         ret_dict['heading_class_label'] = angle_classes.astype(np.int64)
         ret_dict['heading_residual_label'] = angle_residuals.astype(np.float32)
@@ -287,8 +288,18 @@ if __name__=='__main__':
     for i_example in range(4):
         example = dset.__getitem__(i_example)
         print(example['gt_normal_vectors'])
-        """
-        pc_util.write_ply(example['point_clouds'], 'pc_{}.ply'.format(i_example))    
+        
+        
+        pc_util.write_ply(example['point_clouds'], 'pc_{}.ply'.format(i_example))
+
+        scene_idx = int(example['scan_name'][5:9])
+        np.random.seed(scene_idx * scene_idx + 3)  # f: scene_idx -> random seed, for reproducing the results later
+        # TODO: what if we use FPS to pick 10% of the data?
+        labelled = np.random.choice(dset.num_points, \
+                             int(dset.num_points * 0.1), replace=False)
+
+        pc_util.write_ply(example['point_clouds'][labelled], 'pc_labelled_{}.ply'.format(i_example))
+        
         viz_votes(example['point_clouds'], example['vote_label'],
             example['vote_label_mask'],name=i_example)    
         viz_obb(pc=example['point_clouds'], label=example['center_label'],
@@ -296,4 +307,4 @@ if __name__=='__main__':
             angle_classes=None, angle_residuals=None,
             size_classes=example['size_class_label'], size_residuals=example['size_residual_label'],
             name=i_example)
-        """
+        
