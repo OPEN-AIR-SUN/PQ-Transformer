@@ -190,6 +190,14 @@ def roty(t):
                     [0,  1,  0],
                     [-s, 0,  c]])
 
+def roty_tensor(t):
+    import torch
+    c = torch.cos(t)
+    s = torch.sin(t)
+    return torch.tensor([[c,  0,  s],
+                    [0,  1,  0],
+                    [-s, 0,  c]])
+
 def roty_batch(t):
     """Rotation about the y-axis.
     t: (x1,x2,...xn)
@@ -223,6 +231,21 @@ def get_3d_box(box_size, heading_angle, center):
     corners_3d[2,:] = corners_3d[2,:] + center[2]
     corners_3d = np.transpose(corners_3d)
     return corners_3d
+
+def get_3d_box_tensor(box_size, heading_angle, center):
+    R = roty_tensor(heading_angle).cuda()
+    l,w,h = box_size
+    import torch
+    x_corners = torch.stack([l/2,l/2,-l/2,-l/2,l/2,l/2,-l/2,-l/2], dim=0)
+    y_corners = torch.stack([h/2,h/2,h/2,h/2,-h/2,-h/2,-h/2,-h/2], dim=0)
+    z_corners = torch.stack([w/2,-w/2,-w/2,w/2,w/2,-w/2,-w/2,w/2], dim=0)
+    corners_3d = R @ torch.vstack([x_corners,y_corners,z_corners])
+    corners_3d[0,:] = corners_3d[0,:] + center[0]
+    corners_3d[1,:] = corners_3d[1,:] + center[1]
+    corners_3d[2,:] = corners_3d[2,:] + center[2]
+    corners_3d = torch.transpose(corners_3d, 0, 1)
+    return corners_3d
+    
 
 def get_3d_box_batch(box_size, heading_angle, center):
     ''' box_size: [x1,x2,...,xn,3]

@@ -14,7 +14,7 @@ sys.path.append(os.path.join(ROOT_DIR, 'utils'))
 from eval_det import eval_det_cls, eval_det_multiprocessing
 from eval_det import get_iou_obb
 from nms import nms_2d_faster, nms_3d_faster, nms_3d_faster_samecls
-from box_util import get_3d_box
+from box_util import get_3d_box, get_3d_box_tensor
 
 from utils.ap_util import extract_pc_in_box3d
 
@@ -31,9 +31,28 @@ def flip_axis_to_camera(pc):
     pc2[..., 1] *= -1
     return pc2
 
+def flip_axis_to_camera_tensor(pc):
+    ''' 
+    Flip X-right,Y-forward,Z-up to X-right,Y-down,Z-forward
+    Input and output are both (N,3) array
+
+    Tensor version.
+    '''
+
+    pc2 = torch.clone(pc)
+    pc2[..., [0, 1, 2]] = pc2[..., [0, 2, 1]]  # cam X, Y, Z = depth X, -Z, Y
+    pc2[..., 1] *= -1
+    return pc2
+
 
 def flip_axis_to_depth(pc):
     pc2 = np.copy(pc)
+    pc2[..., [0, 1, 2]] = pc2[..., [0, 2, 1]]  # depth X,Y,Z = cam X,Z,-Y
+    pc2[..., 2] *= -1
+    return pc2
+
+def filp_axis_to_depth_tensor(pc):
+    pc2 = torch.clone(pc)
     pc2[..., [0, 1, 2]] = pc2[..., [0, 2, 1]]  # depth X,Y,Z = cam X,Z,-Y
     pc2[..., 2] *= -1
     return pc2
@@ -275,6 +294,30 @@ def get_verts(center,width,height,normal_vector):
 
     return np.array(corners)
 
+def get_verts_tensor(center, width, height, normal_vector):
+    normal_vector = normal_vector / max(np.linalg.norm(normal_vector.cpu().detach()),1e-6)
+
+    x1 = center[0] + width * normal_vector[1] /2
+    x2 = center[0] - width * normal_vector[1] /2
+
+    y1 = center[1] - width * normal_vector[0] /2
+    y2 = center[1] + width * normal_vector[0] /2
+
+    h1 = center[2] + height/2
+    h2 = center[2] - height/2
+
+    x, y, h = torch.stack([x1, x2]).cuda(), torch.stack([y1, y2]).cuda(), torch.stack([h1, h2]).cuda()
+
+    corners = []
+
+    corners.append(torch.stack([x1,y1,h1]))
+    corners.append(torch.stack([x2,y2,h1]))
+    corners.append(torch.stack([x1,y1,h2]))
+    corners.append(torch.stack([x2,y2,h2]))
+
+    return torch.stack(corners, dim=0)
+
+
 
 def parse_quad_predictions(end_points, config_dict, prefix=""):
     """ Parse predictions to OBB parameters and suppress overlapping boxes
@@ -293,6 +336,8 @@ def parse_quad_predictions(end_points, config_dict, prefix=""):
             where pred_list_i = [(pred_sem_cls, box_params, box_score)_j]
             where j = 0, ..., num of valid detections - 1 from sample input i
     """
+
+
     pred_center = end_points[f'{prefix}quad_center']  # B,num_proposal,3
     pred_size = end_points[f'{prefix}quad_size']
     normal_vector =  end_points[f'{prefix}normal_vector']
@@ -304,18 +349,34 @@ def parse_quad_predictions(end_points, config_dict, prefix=""):
     # pred_bbox_check = end_points[f'{prefix}bbox_check']  # B,num_proposal,3
 
     bsize = pred_center.shape[0]
-    pred_corners_3d_upright_camera = np.zeros((bsize, num_proposal, 8, 3))
-    pred_center_upright_camera = flip_axis_to_camera(pred_center.detach().cpu().numpy())
     
+    pred_corners_3d_upright_camera = np.zeros((bsize, num_proposal, 8, 3))
+    pred_corners_3d_upright_camera_tensor = torch.zeros(size=(bsize, num_proposal, 8, 3))
+
+    pred_center_upright_camera = flip_axis_to_camera(pred_center.detach().cpu().numpy())
+    pred_center_upright_camera_tensor = flip_axis_to_camera_tensor(pred_center)
+
     pred_corners = np.zeros((bsize, num_proposal, 4, 3))
+    pred_corners_tensor = torch.zeros((bsize, num_proposal, 4, 3))
     
     for i in range(bsize):
         for j in range(num_proposal):
+
+            # Numpy
             cos_theta = torch.cosine_similarity(torch.tensor(normal_vector[i,j,:].detach().cpu().numpy()),torch.tensor([0,1,0]),dim=0)
             heading_angle = torch.arccos(cos_theta)
             cos_theta1 = torch.cosine_similarity(torch.tensor(normal_vector[i,j,:].detach().cpu().numpy()),torch.tensor([1,0,0]),dim=0)
             if cos_theta1>0:
-              heading_angle = np.pi*2 - heading_angle 
+                heading_angle = np.pi*2 - heading_angle
+
+            # Torch
+            cos_theta_tensor = torch.cosine_similarity(normal_vector[i,j,:], torch.tensor([0,1,0]).cuda(), dim=0)
+            heading_angle_tensor = torch.arccos(cos_theta_tensor)
+            cos_theta1_tensor = torch.cosine_similarity(normal_vector[i,j,:], torch.tensor([1,0,0]).cuda(), dim=0)
+            if cos_theta1_tensor > 0:
+                heading_angle_tensor = torch.pi * 2 - heading_angle_tensor
+
+            # Numpy
             width = pred_size[i,j,0].detach().cpu().numpy()
             height = pred_size[i,j,1].detach().cpu().numpy()
             box_size = np.array([width,LENGTH,height])
@@ -324,6 +385,20 @@ def parse_quad_predictions(end_points, config_dict, prefix=""):
 
             pred_corners[i,j,:] = get_verts(pred_center[i,j,:].detach().cpu().numpy(),width,height,normal_vector[i,j,:].detach().cpu().numpy())
 
+            # Torch
+            width_tensor = pred_size[i, j, 0]
+            height_tensor = pred_size[i, j, 1]
+            box_size_tensor = torch.stack([width_tensor, torch.tensor(LENGTH).cuda(), height_tensor])
+            corners_3d_upright_camera_tensor = get_3d_box_tensor(box_size_tensor, heading_angle_tensor, pred_center_upright_camera_tensor[i, j, :])
+            pred_corners_3d_upright_camera_tensor[i, j] = corners_3d_upright_camera_tensor
+
+            pred_corners_tensor[i, j, :] = get_verts_tensor(pred_center[i, j, :], width_tensor, height_tensor, normal_vector[i,j,:])
+
+
+    
+    import IPython
+    IPython.embed(header="parse_quad_predictions")
+    # TODO: Resume from here, you still have a NMS procedure to convert from Numpy to PyTorch
 
     K = pred_center.shape[1]  # K==num_proposal
     nonempty_box_mask = np.ones((bsize, K))
