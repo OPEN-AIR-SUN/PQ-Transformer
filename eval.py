@@ -360,8 +360,8 @@ def evaluate_one_epoch(test_loader, DATASET_CONFIG, CONFIG_DICT, AP_IOU_THRESHOL
                     # pc_scene = pc_scene[np.argwhere(outside > 0).reshape(-1), :]
 
                 from models.utils.distance_util import calc_distance_vertically, calc_distance_from_center
-                # distance = calc_distance_vertically(pc_scene, predicted_quads)
-                distance = calc_distance_from_center(pc_scene, predicted_quads)
+                distance = calc_distance_vertically(pc_scene, predicted_quads)
+                # distance = calc_distance_from_center(pc_scene, predicted_quads)
 
 
                 # distance = np.abs(distance)
