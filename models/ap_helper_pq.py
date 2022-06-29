@@ -337,10 +337,16 @@ def parse_quad_predictions(end_points, config_dict, prefix=""):
             where j = 0, ..., num of valid detections - 1 from sample input i
     """
 
-
     pred_center = end_points[f'{prefix}quad_center']  # B,num_proposal,3
     pred_size = end_points[f'{prefix}quad_size']
     normal_vector =  end_points[f'{prefix}normal_vector']
+
+    # Simulate training process
+    # TODO: delete this
+    pred_center.requires_grad = True
+    pred_size.requires_grad = True
+    normal_vector.requires_grad = True
+
 
     num_proposal = pred_center.shape[1]
     # Since we operate in upright_depth coord for points, while util functions
@@ -396,8 +402,6 @@ def parse_quad_predictions(end_points, config_dict, prefix=""):
 
 
     
-    import IPython
-    IPython.embed(header="parse_quad_predictions")
     # TODO: Resume from here, you still have a NMS procedure to convert from Numpy to PyTorch
 
     K = pred_center.shape[1]  # K==num_proposal
@@ -405,6 +409,9 @@ def parse_quad_predictions(end_points, config_dict, prefix=""):
 
     obj_logits = end_points[f'{prefix}quad_scores'].detach().cpu().numpy()
     obj_prob = sigmoid(obj_logits)[:, :, 1]  # (B,K)
+
+    obj_logits_tensor = end_points[f'{prefix}quad_scores']
+    obj_prob_tensor = torch.sigmoid(obj_logits_tensor.reshape(-1, 2)).reshape(obj_logits_tensor.shape)
     #print(obj_prob)
 
     # ---------- NMS input: pred_with_prob in (B,K,7) -----------
@@ -429,12 +436,23 @@ def parse_quad_predictions(end_points, config_dict, prefix=""):
     batch_pred_map_cls = []  # a list (len: batch_size) of list (len: num of predictions per sample) of tuples of pred_cls, pred_box and conf (0-1)
     
     batch_pred_corners_list = []
+
+    batch_pred_map_cls_tensor = [[] for _ in range(bsize)]
+    batch_pred_corners_list_tensor = [[] for _ in range(bsize)]
     
     for i in range(bsize):
         batch_pred_map_cls.append([(1, pred_corners_3d_upright_camera[i, j], obj_prob[i, j]) \
                                     for j in range(pred_center.shape[1]) if pred_mask[i, j] == 1 and obj_prob[i, j] > config_dict['conf_thresh']])
         batch_pred_corners_list.append([pred_corners[i, j]\
                                     for j in range(pred_center.shape[1]) if pred_mask[i, j] == 1 and obj_prob[i, j] > 0.5])
+
+        for j in range(pred_center.shape[1]):
+            if pred_mask[i, j] == 1 and obj_prob[i, j] > config_dict['conf_thresh']:
+                batch_pred_map_cls_tensor[i].append((1, pred_corners_3d_upright_camera_tensor[i, j], obj_prob_tensor[i, j]))
+                batch_pred_corners_list_tensor[i].append(pred_corners_tensor[i, j])
+
+    end_points[f"{prefix}batch_pred_map_cls_tensor"] = batch_pred_map_cls_tensor
+    end_points[f"{prefix}batch_pred_corners_list_tensor"] = batch_pred_corners_list_tensor
 
     return batch_pred_map_cls,pred_mask, batch_pred_corners_list
 

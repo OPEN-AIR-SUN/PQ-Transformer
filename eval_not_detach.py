@@ -4,6 +4,7 @@ import matplotlib.pyplot as plt
 
 from models.dump_helper import dump_results
 from models.dump_helper_quad import dump_results_quad
+from fit import fit_gamma
 
 import os
 import sys
@@ -24,12 +25,14 @@ ROOT_DIR = BASE_DIR
 sys.path.append(os.path.join(ROOT_DIR, 'pointnet2'))
 sys.path.append(os.path.join(ROOT_DIR, 'models'))
 
-
+from IPython import embed
 from utils.lr_scheduler import get_scheduler
 from utils.logger import setup_logger
 from models.pq_transformer import PQ_Transformer
 from models.loss_helper_pq import get_loss
 from models.ap_helper_pq import APCalculator, parse_predictions, parse_groundtruths, QUADAPCalculator, parse_quad_predictions, parse_quad_groundtruths
+
+from tqdm import tqdm
 
 def parse_option():
     parser = argparse.ArgumentParser()
@@ -287,7 +290,7 @@ def evaluate_one_epoch(test_loader, DATASET_CONFIG, CONFIG_DICT, AP_IOU_THRESHOL
     batch_gt_corner_dict = {k: [] for k in prefixes}
 
     batch_gt_horizontal_dict = {k: [] for k in prefixes}
-    for batch_idx, batch_data_label in enumerate(test_loader):
+    for batch_idx, batch_data_label in tqdm(enumerate(test_loader)):
 
         for key in batch_data_label:
             if key == 'scan_name':
@@ -339,7 +342,6 @@ def evaluate_one_epoch(test_loader, DATASET_CONFIG, CONFIG_DICT, AP_IOU_THRESHOL
 
             # === Distance Loss ===
             for b in range(end_points['point_clouds'].shape[0]):
-
                 pc_scene = end_points['point_clouds'][b]
                 semantic_labels = end_points['semantic_labels'][b]
 
@@ -358,33 +360,53 @@ def evaluate_one_epoch(test_loader, DATASET_CONFIG, CONFIG_DICT, AP_IOU_THRESHOL
 
                     # pc_scene: (#num_points, 3) -> (#num_points_not_in_predicted_quad, 3)
                     # pc_scene = pc_scene[np.argwhere(outside > 0).reshape(-1), :]
-
-                from models.utils.distance_util import calc_distance_vertically, calc_distance_from_center
-                distance = calc_distance_vertically(pc_scene, predicted_quads)
-                # distance = calc_distance_from_center(pc_scene, predicted_quads)
+                    # semantic_labels = semantic_labels[np.argwhere(outside > 0).reshape(-1)]
 
 
-                # distance = np.abs(distance)
-                layout_categories = (1, 8, 9,)
-                distance_wall = distance[np.isin(semantic_labels.cpu().numpy(), layout_categories)]
-                d2c = lambda d: ((128 + min(1, abs(d)) * 127) / 255, (255 - min(1, abs(d)) * 127) / 255, 1.)
-                with open(f'statistics/distance-{end_points["scan_idx"][b].item()}.txt', 'w') as f:
+
+                pc_center = torch.mean(pc_scene, dim=0).cpu().numpy()  # To find the inner side of the point clouds
+
+                # pc_wall_scene = pc_scene[semantic_labels == 1]
+                mask = semantic_labels == 1
+                mask = torch.bitwise_or(mask, semantic_labels == 8)
+                mask = torch.bitwise_or(mask, semantic_labels == 9)
+                distance = 10.0 + np.zeros(shape=(pc_scene.shape[0], ))
+                # Calculate distances
+                for predicted_quad in predicted_quads:
+                    quad_center = np.mean(predicted_quad, axis=0)
+                    predicted_quad_norm = np.cross(predicted_quad[1] - predicted_quad[0], predicted_quad[2] - predicted_quad[0])
+                    predicted_quad_norm = predicted_quad_norm / np.linalg.norm(predicted_quad_norm)
+
+                    if np.dot(pc_center - quad_center, predicted_quad_norm) > 0:
+                        predicted_quad_norm = -predicted_quad_norm  # Make inner distance < 0 and outsider > 0
+
+                    new_distance = np.dot(pc_scene.cpu().numpy() - quad_center, predicted_quad_norm)
+
+                    distance[(np.abs(new_distance) < np.abs(distance))] = new_distance[(np.abs(new_distance) < np.abs(distance))]
+
+                distance_wall = distance[mask.cpu().numpy()]
+                embed()
+                np.save(f'statistics_zcy/distance-{end_points["scan_idx"][b].item()}.npy', distance_wall)
+                plt.cla()
+                plt.hist(distance_wall, bins=100, color='g', alpha=0.5)
+                plt.savefig(f'statistics_zcy/distribution-{end_points["scan_idx"][b].item()}.png')
+
+                distance = np.abs(distance)
+                distance_wall = distance[mask.cpu().numpy()]
+                d2c = lambda d: ((128 + min(1, d) * 127)/255, (255-min(1, d) * 127)/255, 1.)
+                with open(f'statistics_zcy/distance-{end_points["scan_idx"][b].item()}.txt', 'w') as f:
                     for i in range(len(pc_scene)):
-                        if semantic_labels[i] in layout_categories:
+                        if mask[i]:
                             color = d2c(distance[i])
                             # color = (255,255,255)
                         else:
-                            color = (64 / 256, 64 / 256, 64 / 256)
+                            color = (64/256,64/256,64/256)
                         print(f"{pc_scene[i][0]} {pc_scene[i][1]} {pc_scene[i][2]} {color[0]} {color[1]} {color[2]}", file=f)
-
-                import matplotlib
-                matplotlib.use('Agg')
-
-                plt.clf()
+                    
+                np.save(f'statistics_zcy/distance-abs-{end_points["scan_idx"][b].item()}.npy', distance_wall)
+                plt.cla()
                 plt.hist(distance_wall, bins=100, color='g', alpha=0.5)
-                plt.savefig(f'statistics/distribution-{end_points["scan_name"][b][5:9]}.png')
-
-                dump_results_quad(end_points, os.path.join(ROOT_DIR, f"statistics/display-{end_points['scan_name'][b][5:9]}"), DATASET_CONFIG)
+                plt.savefig(f'statistics_zcy/distribution-{end_points["scan_idx"][b].item()}-abs.png')
 
             
             if config.dump_result:

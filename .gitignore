@@ -5,6 +5,7 @@ __pycache__/
 pointnet2/build/
 pointnet2/dist/
 pointnet2/pointnet2.egg-info/
+scannet/*
 scannet/scannet_planes/ 
 scannet/scannet_train_detection_data/
 .idea/

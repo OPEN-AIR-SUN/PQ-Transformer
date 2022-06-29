@@ -405,7 +405,6 @@ def evaluate_one_epoch(test_loader, DATASET_CONFIG, CONFIG_DICT, AP_IOU_THRESHOL
                 plt.cla()
                 plt.hist(distance_wall, bins=100, color='g', alpha=0.5)
                 plt.savefig(f'statistics_tbw/distribution-{end_points["scan_idx"][b].item()}-abs.png')
-                embed()
 
             
             if config.dump_result:
