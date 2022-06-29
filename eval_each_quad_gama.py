@@ -1,6 +1,6 @@
 from ast import dump
 
-import IPython
+import matplotlib.pyplot as plt
 
 from models.dump_helper import dump_results
 from models.dump_helper_quad import dump_results_quad
@@ -12,6 +12,7 @@ import numpy as np
 import json
 import argparse
 import random
+from fit import fit_gamma
 
 import torch
 import torch.optim as optim
@@ -24,18 +25,19 @@ ROOT_DIR = BASE_DIR
 sys.path.append(os.path.join(ROOT_DIR, 'pointnet2'))
 sys.path.append(os.path.join(ROOT_DIR, 'models'))
 
-
+from IPython import embed
 from utils.lr_scheduler import get_scheduler
 from utils.logger import setup_logger
 from models.pq_transformer import PQ_Transformer
 from models.loss_helper_pq import get_loss
-from models.ap_helper_pq import APCalculator, parse_predictions, parse_groundtruths,QUADAPCalculator, parse_quad_predictions,parse_quad_groundtruths
+from models.ap_helper_pq import APCalculator, parse_predictions, parse_groundtruths, QUADAPCalculator, parse_quad_predictions, parse_quad_groundtruths
 
+from tqdm import tqdm
 
 def parse_option():
     parser = argparse.ArgumentParser()
     # Model
-    parser.add_argument('--num_target', type=int, default=256, help='Proposal number [default: 256]')
+    parser.add_argument('--num_target', type=int, default=256, help='Object proposal number [default: 256]')
     parser.add_argument('--quad_num_target', type=int, default=256, help='Quad proposal number [default: 256]')
     parser.add_argument('--sampling', default='vote', type=str, help='Query points sampling method (kps, fps)')
 
@@ -48,19 +50,13 @@ def parse_option():
 
     # Data
     parser.add_argument('--batch_size', type=int, default=8, help='Batch Size during training [default: 8]')
-    parser.add_argument('--dataset', default='scannet', help='Dataset name. [default: scannet]')
+    parser.add_argument('--dataset', default='scannet', help='Dataset name.  [default: scannet]')
     parser.add_argument('--num_point', type=int, default=40000, help='Point Number [default: 50000]')
     parser.add_argument('--use_height', action='store_true', help='Use height signal in input.')
     parser.add_argument('--use_color', action='store_true', help='Use RGB color in input.')
     parser.add_argument('--num_workers', type=int, default=4, help='num of workers to use')
 
-    # Dataset Splitting
-    parser.add_argument('--start_proportion', default=0.0, type=float, help='Start proportion of the dataset')
-    parser.add_argument('--end_proportion', default=1.0, type=float, help='End proportion of the dataset')
-
     # Training
-    parser.add_argument('--start_epoch', type=int, default=1, help='Epoch to run [default: 1]')
-    parser.add_argument('--max_epoch', type=int, default=600, help='Epoch to run [default: 180]')
     parser.add_argument('--optimizer', type=str, default='adamW', help='optimizer')
     parser.add_argument('--momentum', type=float, default=0.9, help='momentum for SGD')
     parser.add_argument('--weight_decay', type=float, default=0.0005,
@@ -69,11 +65,11 @@ def parse_option():
                         help='Initial learning rate for all except decoder [default: 0.004]')
     parser.add_argument('--decoder_learning_rate', type=float, default=0.0001,
                         help='Initial learning rate for decoder [default: 0.0004]')
-    parser.add_argument('--lr-scheduler', type=str, default='cosine',
+    parser.add_argument('--lr-scheduler', type=str, default='step',
                         choices=["step", "cosine"], help="learning rate scheduler")
     parser.add_argument('--warmup-epoch', type=int, default=-1, help='warmup epoch')
     parser.add_argument('--warmup-multiplier', type=int, default=100, help='warmup multiplier')
-    parser.add_argument('--lr_decay_epochs', type=int, default=[900,1000], nargs='+',
+    parser.add_argument('--lr_decay_epochs', type=int, default=[320, 380], nargs='+',
                         help='for step scheduler. where to decay lr, can be a list')
     parser.add_argument('--lr_decay_rate', type=float, default=0.1,
                         help='for step scheduler. decay rate for learning rate')
@@ -93,9 +89,9 @@ def parse_option():
     parser.add_argument("--local_rank", type=int, help='local rank for DistributedDataParallel')
     parser.add_argument('--ap_iou_thresholds', type=float, default=[0.25], nargs='+',  #0.5
                         help='A list of AP IoU thresholds [default: 0.25,0.5]')
-    parser.add_argument("--rng_seed", type=int, default=0, help='manual seed')
-    parser.add_argument("--pc_loss", action='store_true', help='pc_loss')
-    parser.add_argument("--dump_result", action='store_true', help='pc_loss')
+    parser.add_argument("--rng_seed", type=int, default=10, help='manual seed')
+    parser.add_argument("--dump_result", action='store_true', help='dump')
+
 
     args, unparsed = parser.parse_known_args()
 
@@ -118,10 +114,6 @@ def load_checkpoint(args, model, optimizer, scheduler):
     logger.info("=> loading checkpoint '{}'".format(args.checkpoint_path))
 
     checkpoint = torch.load(args.checkpoint_path, map_location='cpu')
-    if checkpoint['epoch'] == 'last':
-        checkpoint['epoch'] = 600
-
-    args.start_epoch = checkpoint['epoch'] + 1
     model.load_state_dict(checkpoint['model'])
     optimizer.load_state_dict(checkpoint['optimizer'])
     scheduler.load_state_dict(checkpoint['scheduler'])
@@ -152,8 +144,6 @@ def save_checkpoint(args, epoch, model, optimizer, scheduler, save_cur=False):
         torch.save(state, os.path.join(args.log_dir, f'ckpt_epoch_{epoch}.pth'))
         logger.info("Saved in {}".format(os.path.join(args.log_dir, f'ckpt_epoch_{epoch}.pth')))
     else:
-        # state['save_path'] = 'current.pth'
-        # torch.save(state, os.path.join(args.log_dir, 'current.pth'))
         print("not saving checkpoint")
         pass
 
@@ -173,9 +163,7 @@ def get_loader(args):
         TRAIN_DATASET = ScannetDetectionDataset('train', num_points=args.num_point,
                                                 augment=True,
                                                 use_color=True if args.use_color else False,
-                                                use_height=True if args.use_height else False,
-                                                start_proportion=args.start_proportion,
-                                                end_proportion=args.end_proportion,)
+                                                use_height=True if args.use_height else False)
 
         TEST_DATASET = ScannetDetectionDataset('val', num_points=args.num_point,
                                                augment=False,
@@ -222,8 +210,7 @@ def get_model(args, DATASET_CONFIG):
                               input_feature_dim=num_input_channel,
                               num_proposal=args.num_target,
                               num_quad_proposal=args.quad_num_target,
-                              sampling=args.sampling
-                              )
+                              sampling=args.sampling)
     criterion = get_loss
     return model, criterion
 
@@ -241,9 +228,9 @@ def main(args):
     # optimizer
     if args.optimizer == 'adamW':
         param_dicts = [
-            {"params": [p for n, p in model.named_parameters() if "decoder" not in n and p.requires_grad]},
+            {"params": [p for n, p in model.named_parameters() if "coder" not in n and p.requires_grad]},
             {
-                "params": [p for n, p in model.named_parameters() if "decoder" in n and p.requires_grad],
+                "params": [p for n, p in model.named_parameters() if "coder" in n and p.requires_grad],
                 "lr": args.decoder_learning_rate,
             },
         ]
@@ -264,89 +251,14 @@ def main(args):
     # Used for AP calculation
     CONFIG_DICT = {'remove_empty_box': False, 'use_3d_nms': True,
                    'nms_iou': 0.25, 'use_old_type_nms': False, 'cls_nms': True,
-                   'per_class_proposal': True, 'conf_thresh': 0.0,'quad_thresh':0.5,
+                   'per_class_proposal': True, 'conf_thresh': 0.0,
                    'dataset_config': DATASET_CONFIG}
 
-    for epoch in range(args.start_epoch, args.max_epoch + 1):
-        train_loader.sampler.set_epoch(epoch)
-
-        tic = time.time()
-
-        train_one_epoch(epoch, train_loader, DATASET_CONFIG, model, criterion, optimizer, scheduler, args)
-
-        logger.info('epoch {}, total time {:.2f}, '
-                    'lr_base {:.5f}, lr_decoder {:.5f}'.format(epoch, (time.time() - tic),
-                                                               optimizer.param_groups[0]['lr'],
-                                                               optimizer.param_groups[1]['lr']))
-
-        if epoch % args.val_freq == 1:
-            evaluate_one_epoch(test_loader, DATASET_CONFIG, CONFIG_DICT, args.ap_iou_thresholds, model,criterion, args) 
-              
-        if dist.get_rank() == 0:
-            # save model
-            save_checkpoint(args, epoch, model, optimizer, scheduler)
-    
     evaluate_one_epoch(test_loader, DATASET_CONFIG, CONFIG_DICT, args.ap_iou_thresholds, model, criterion, args)
     save_checkpoint(args, 'last', model, optimizer, scheduler, save_cur=True)
     logger.info("Saved in {}".format(os.path.join(args.log_dir, f'ckpt_epoch_last.pth')))
     return os.path.join(args.log_dir, f'ckpt_epoch_last.pth')
 
-
-def train_one_epoch(epoch, train_loader, DATASET_CONFIG, model, criterion, optimizer, scheduler, config):
-    stat_dict = {}  # collect statistics
-    model.train()  # set model to training mode
-    for batch_idx, batch_data_label in enumerate(train_loader):
-
-        for key in batch_data_label:
-            if key == 'scan_name':
-                continue
-            batch_data_label[key] = batch_data_label[key].cuda(non_blocking=True)
-        inputs = {'point_clouds': batch_data_label['point_clouds']}
-
-        # Forward pass
-        end_points = model(inputs)
- 
-        # Compute loss and gradients, update parameters.
-        for key in batch_data_label:
-            assert (key not in end_points)
-            end_points[key] = batch_data_label[key]
-        loss, end_points = criterion(end_points, DATASET_CONFIG, pc_loss = config.pc_loss)
-
-        optimizer.zero_grad()
-        loss.backward()
-        if config.clip_norm > 0:
-            grad_total_norm = torch.nn.utils.clip_grad_norm_(model.parameters(), config.clip_norm)
-        optimizer.step()
-        scheduler.step()
-
-        # Accumulate statistics and print out
-        stat_dict['grad_norm'] = grad_total_norm
-        for key in end_points:
-            if 'loss' in key or 'acc' in key or 'ratio' in key:
-                if key not in stat_dict: stat_dict[key] = 0
-                if isinstance(end_points[key], float):
-                    stat_dict[key] += end_points[key]
-                else:
-                    stat_dict[key] += end_points[key].item()
-
-        if (batch_idx + 1) % config.print_freq == 0:
-            logger.info(f'Train: [{epoch}][{batch_idx + 1}/{len(train_loader)}]  ' + ''.join(
-                [f'{key} {stat_dict[key] / config.print_freq:.4f} \t'
-                 for key in sorted(stat_dict.keys()) if 'loss' not in key]))
-            logger.info(f"grad_norm: {stat_dict['grad_norm']}")
-            logger.info(''.join([f'{key} {stat_dict[key] / config.print_freq:.4f} \t'
-                                 for key in sorted(stat_dict.keys()) if
-                                 'loss' in key and 'proposal_' not in key and 'last_' not in key and 'head_' not in key]))
-            logger.info(''.join([f'{key} {stat_dict[key] / config.print_freq:.4f} \t'
-                                 for key in sorted(stat_dict.keys()) if 'last_' in key]))
-            logger.info(''.join([f'{key} {stat_dict[key] / config.print_freq:.4f} \t'
-                                 for key in sorted(stat_dict.keys()) if 'proposal_' in key]))
-            for ihead in range(config.num_decoder_layers - 2, -1, -1):
-                logger.info(''.join([f'{key} {stat_dict[key] / config.print_freq:.4f} \t'
-                                     for key in sorted(stat_dict.keys()) if f'{ihead}head_' in key]))
-
-            for key in sorted(stat_dict.keys()):
-                stat_dict[key] = 0
 
 
 def evaluate_one_epoch(test_loader, DATASET_CONFIG, CONFIG_DICT, AP_IOU_THRESHOLDS, model, criterion, config):
@@ -378,7 +290,8 @@ def evaluate_one_epoch(test_loader, DATASET_CONFIG, CONFIG_DICT, AP_IOU_THRESHOL
     batch_gt_corner_dict = {k: [] for k in prefixes}
 
     batch_gt_horizontal_dict = {k: [] for k in prefixes}
-    for batch_idx, batch_data_label in enumerate(test_loader):
+    for batch_idx, batch_data_label in tqdm(enumerate(test_loader)):
+
         for key in batch_data_label:
             if key == 'scan_name':
                 continue
@@ -396,7 +309,7 @@ def evaluate_one_epoch(test_loader, DATASET_CONFIG, CONFIG_DICT, AP_IOU_THRESHOL
             end_points[key] = batch_data_label[key]
         
 
-        loss, end_points = criterion(end_points, DATASET_CONFIG, pc_loss = config.pc_loss)
+        loss, end_points = criterion(end_points, DATASET_CONFIG, pc_loss = False)
 
         # Accumulate statistics and print out
         for key in end_points:
@@ -416,6 +329,10 @@ def evaluate_one_epoch(test_loader, DATASET_CONFIG, CONFIG_DICT, AP_IOU_THRESHOL
 
 
             batch_pred_quad_map_cls,pred_quad_mask,batch_pred_quad_corner = parse_quad_predictions(end_points, CONFIG_DICT, prefix)
+            scores = [
+                [j[2] for j in batch_pred_quad_map_cls[i] if j[2] > 0.5]
+                for i in range(8)
+            ]
             batch_gt_quad_map_cls,batch_gt_quad_corner = parse_quad_groundtruths(end_points, CONFIG_DICT)
             
             batch_pred_quad_map_cls_dict[prefix].append(batch_pred_quad_map_cls)
@@ -426,7 +343,92 @@ def evaluate_one_epoch(test_loader, DATASET_CONFIG, CONFIG_DICT, AP_IOU_THRESHOL
             batch_gt_horizontal_dict[prefix].append(end_points['horizontal_quads']) 
 
             end_points['pred_quad_mask']=pred_quad_mask
-            
+
+            # === Distance Loss ===
+            for b in range(end_points['point_clouds'].shape[0]):
+                pc_scene = end_points['point_clouds'][b]
+                semantic_labels = end_points['semantic_labels'][b]
+
+                predicted_quads = batch_pred_quad_corner[b]
+
+                # Filter out all points inside predicted quads
+
+                for predicted_quad in predicted_quads:
+                    lower_bound = np.min(predicted_quad, axis=0)
+                    upper_bound = np.max(predicted_quad, axis=0)
+
+                    outside = np.zeros(shape=(pc_scene.shape[0], ))
+
+                    for i in range(3):
+                        outside[torch.logical_or(pc_scene[:, i] < lower_bound[i], upper_bound[i] < pc_scene[:, i]).cpu().numpy()] = 1
+
+                    # pc_scene: (#num_points, 3) -> (#num_points_not_in_predicted_quad, 3)
+                    # pc_scene = pc_scene[np.argwhere(outside > 0).reshape(-1), :]
+                    # semantic_labels = semantic_labels[np.argwhere(outside > 0).reshape(-1)]
+                
+
+                pc_center = torch.mean(pc_scene, dim=0).cpu().numpy()  # To find the inner side of the point clouds
+
+                # pc_wall_scene = pc_scene[semantic_labels == 1]
+                mask = semantic_labels == 1
+                mask = torch.bitwise_or(mask, semantic_labels == 8)
+                mask = torch.bitwise_or(mask, semantic_labels == 9)
+                distance = 10.0 + np.zeros(shape=(pc_scene.shape[0], ))
+                scores_points = 0 + np.zeros(shape=(pc_scene.shape[0], ))
+
+                # Calculate distances
+                
+                indices = np.zeros(shape=(pc_scene.shape[0], ))
+                for idx, predicted_quad in enumerate(predicted_quads):
+                    quad_center = np.mean(predicted_quad, axis=0)
+                    predicted_quad_norm = np.cross(predicted_quad[1] - predicted_quad[0], predicted_quad[2] - predicted_quad[0])
+                    predicted_quad_norm = predicted_quad_norm / np.linalg.norm(predicted_quad_norm)
+
+                    if np.dot(pc_center - quad_center, predicted_quad_norm) > 0:
+                        predicted_quad_norm = -predicted_quad_norm  # Make inner distance < 0 and outsider > 0
+
+                    new_distance = np.dot(pc_scene.cpu().numpy() - quad_center, predicted_quad_norm)
+                    score = scores[b][idx]
+                    choice = (np.abs(new_distance) < np.abs(distance))
+                    distance[choice] = new_distance[choice]
+                    indices[choice] = idx
+                    scores_points[choice] = score
+
+                distance_wall = distance[mask.cpu().numpy()]
+                scores_points_wall = scores_points[mask.cpu().numpy()]
+                indices_wall = indices[mask.cpu().numpy()]
+                threed_vertex = []
+                for idx, each in enumerate(mask):
+                    if each:
+                        threed_vertex.append(pc_scene[idx])
+                os.makedirs('statistics_per_quad', exist_ok=True)
+                musk_label = [True] * len(distance_wall)
+                for each_quad_index in range(len(predicted_quads)): 
+                    try:
+                        index = [idx for idx, each in enumerate(indices_wall == each_quad_index) if each == True]
+                        arr = distance_wall[indices_wall == each_quad_index]
+                        musked_label = fit_gamma(arr)
+                        for idx, each in enumerate(musked_label):
+                            if each == False:
+                                musk_label[index[idx]] = False
+                    except Exception as e:
+                        print(idx)
+                        pass
+                with open(f'statistics_per_quad/distance-{end_points["scan_idx"][b].item()}.txt', 'w') as f:
+                        for idx, each in enumerate(musk_label):
+                            if each:
+                                color = (0/256, 0/256, 0/256)
+                            else:
+                                color = (128/256, 128/256, 128/256)
+                            print(f"{threed_vertex[idx][0]} {threed_vertex[idx][1]} {threed_vertex[idx][2]} {color[0]} {color[1]} {color[2]}", file=f)
+                plt.cla()
+                for idx in range(len(predicted_quads)):
+                    plt.hist(distance_wall[indices_wall == idx], bins=1000, alpha=0.5, histtype='step', color=[random.randint(0, 255)/256 for _ in range(3)])
+                plt.savefig(f'statistics_per_quad/distribution-{end_points["scan_idx"][b].item()}.png')
+                # embed()
+
+                
+
             if config.dump_result:
                 print("dumping...")
                 dump_results(end_points, os.path.join(ROOT_DIR,'dump/%01dbest'%(batch_idx)), DATASET_CONFIG) 
@@ -447,6 +449,7 @@ def evaluate_one_epoch(test_loader, DATASET_CONFIG, CONFIG_DICT, AP_IOU_THRESHOL
             for ihead in range(config.num_decoder_layers - 2, -1, -1):
                 logger.info(''.join([f'{key} {stat_dict[key] / (float(batch_idx + 1)):.4f} \t'
                                      for key in sorted(stat_dict.keys()) if f'{ihead}head_' in key]))
+
     #objects:
     mAP = 0.0
     for prefix in prefixes:
@@ -482,8 +485,7 @@ def evaluate_one_epoch(test_loader, DATASET_CONFIG, CONFIG_DICT, AP_IOU_THRESHOL
         # Evaluate average precision
         for i, ap_calculator in enumerate(quad_ap_calculator_list):
             metrics_dict = ap_calculator.compute_metrics()
-            f1 = ap_calculator.compute_F1()
-            logger.info(f'=====================>Layout Estimation<=====================')
+            f1 = ap_calculator.compute_F1(calculated=True)
             logger.info(f'F1 scores: {f1}')
             # logger.info(f'=====================>{prefix} IOU THRESH: {AP_IOU_THRESHOLDS[i]}<=====================')
             # for key in metrics_dict:
@@ -496,26 +498,24 @@ def evaluate_one_epoch(test_loader, DATASET_CONFIG, CONFIG_DICT, AP_IOU_THRESHOL
     for mAP_ in mAPs:
         logger.info(f'IoU[{mAP_[0]}]:\t' + ''.join([f'{key}: {mAP_[1][key]:.4f} \t' for key in sorted(mAP_[1].keys())]))
  
-    return mAP
 
+    return mAP
 
 if __name__ == '__main__':
     opt = parse_option()
     
-    
-    torch.cuda.set_device(opt.local_rank)
+    torch.cuda.set_device(opt.local_rank if opt.local_rank else 0)
     torch.distributed.init_process_group(backend='nccl', init_method='env://')
     initiate_environment(opt)
     torch.backends.cudnn.enabled = True
     torch.backends.cudnn.benchmark = True
     torch.backends.cudnn.deterministic = True
-    
-    import time
+
     LOG_DIR = os.path.join(opt.log_dir, 'pq-transformer',
-                           f'{opt.dataset}_{time.strftime("%Y%m%d_%H%M%S")}', f'{np.random.randint(100000000)}')
+                           f'{opt.dataset}_{int(time.time())}', f'{np.random.randint(100000000)}')
     while os.path.exists(LOG_DIR):
         LOG_DIR = os.path.join(opt.log_dir, 'pq-transformer',
-                               f'{opt.dataset}_{time.strftime("%Y%m%d_%H%M%S")}', f'{np.random.randint(100000000)}')
+                               f'{opt.dataset}_{int(time.time())}', f'{np.random.randint(100000000)}')
     opt.log_dir = LOG_DIR
     os.makedirs(opt.log_dir, exist_ok=True)
 

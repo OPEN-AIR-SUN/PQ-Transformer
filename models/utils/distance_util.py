@@ -90,17 +90,38 @@ def calc_distance_from_center(_pc_scene, predicted_quads, lambda_l=0):
 
 
 
-def distance_loss(points, quads):
-    """
+def distance_loss(end_points, config, query_points_obj_topk, pc_loss, num_layer):
 
-    Args:
-        points: (batch_size, #point_num, 3)
-        quads:
-            center: (batch_size, #quad_num, 3)
+    distance_loss = 0.0
 
-    Returns:
-        Array of (batch_size, #point_num, distance)
-        Indicates the distance of the point to the nearest quad
+    points, semantic_labels = end_points['point_clouds'], end_points['semantic_labels']
+    batch_size = points.shape[0]
+    CONFIG_DICT = {'remove_empty_box': False, 'use_3d_nms': True,
+                   'nms_iou': 0.25, 'use_old_type_nms': False, 'cls_nms': True,
+                   'per_class_proposal': True, 'conf_thresh': 0.0,'quad_thresh':0.5,
+                   'dataset_config': None} 
+        
+    prefixes = ['proposal_'] + ['last_'] + [f'{i}head_' for i in range(num_layer-1)]
 
-    """
+    for prefix in prefixes:
+        from models.ap_helper_pq import parse_quad_predictions
+        batch_pred_map_cls, pred_mask, batch_pred_corners_list = parse_quad_predictions(end_points, CONFIG_DICT, prefix)
+
+        for b in range(batch_size):
+    
+            # Retrieve quads
+            point_cloud, semantic_label = points[b], semantic_labels[b]
+            import IPython
+            IPython.embed(header="in training process, before calcing loss")
+            pred_corner = end_points['proposal_batch_pred_corners_list_tensor'][b]
+
+
+            # Calculate Distances
+
+            # Filter out points
+
+            # Calculate distance loss and accumulate
+
+    lambda_distance = 0.50
+    return lambda_ 
     pass

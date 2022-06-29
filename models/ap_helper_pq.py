@@ -341,12 +341,6 @@ def parse_quad_predictions(end_points, config_dict, prefix=""):
     pred_size = end_points[f'{prefix}quad_size']
     normal_vector =  end_points[f'{prefix}normal_vector']
 
-    # Simulate training process
-    # TODO: delete this
-    pred_center.requires_grad = True
-    pred_size.requires_grad = True
-    normal_vector.requires_grad = True
-
 
     num_proposal = pred_center.shape[1]
     # Since we operate in upright_depth coord for points, while util functions
