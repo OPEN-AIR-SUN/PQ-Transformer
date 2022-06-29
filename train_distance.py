@@ -314,8 +314,6 @@ def train_one_epoch(epoch, train_loader, DATASET_CONFIG, model, criterion, optim
         #     assert (key not in end_points)
         #     end_points[key] = batch_data_label[key]
 
-        print
-
         loss, end_points = criterion(end_points, DATASET_CONFIG, pc_loss = config.pc_loss)
 
         optimizer.zero_grad()

@@ -257,7 +257,7 @@ class PQ_Transformer(nn.Module):
             base_xyz, base_size, end_points = self.prediction_heads[i](query,base_xyz=cluster_xyz,end_points=end_points,prefix=prefix)
             base_xyz_, base_size_, end_points = self.prediction_quad_heads[i](query_,base_xyz=quad_cluster_xyz,end_points=end_points,prefix=prefix)
     
-            base_xyz = base_xyz.detach().clone()
+            base_xyz = base_xyz.detach().clone()  # I don't understand why here detached ???
             base_xyz_ = base_xyz_.detach().clone()
 
 

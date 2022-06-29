@@ -10,11 +10,11 @@ def calc_distance_vertically(_pc_scene, predicted_quads):
 
     pc_scene = _pc_scene.cuda()
     pc_center = torch.mean(pc_scene, dim=0)  # To find the inner side of the point clouds
-    distance = 10.0 * torch.ones((pc_scene.shape[0],), dtype=torch.double).cuda()
+    distance = 10.0 * torch.ones((pc_scene.shape[0],), dtype=torch.float).cuda()
 
     # Calculate distances
     for _predicted_quad in predicted_quads:
-        predicted_quad = torch.tensor(_predicted_quad).cuda()
+        predicted_quad = _predicted_quad.cuda()
         # TODO: convert params predicted_quad to torch.Tensor before and after nms to form a complete compute map
         quad_center = torch.mean(predicted_quad, dim=0)
         predicted_quad_norm = torch.cross(predicted_quad[1] - predicted_quad[0], predicted_quad[2] - predicted_quad[0])
@@ -38,7 +38,7 @@ def calc_distance_vertically(_pc_scene, predicted_quads):
 def calc_distance_from_center(_pc_scene, predicted_quads, lambda_l=0):
     pc_scene = _pc_scene.cuda()
     pc_center = torch.mean(pc_scene, dim=0)
-    distance = 10.0 * torch.ones((pc_scene.shape[0],), dtype=torch.double).cuda()
+    distance = 10.0 * torch.ones((pc_scene.shape[0],), dtype=torch.float).cuda()
 
     # Calculate distances per quad
     for _predicted_quad in predicted_quads:
@@ -101,27 +101,52 @@ def distance_loss(end_points, config, query_points_obj_topk, pc_loss, num_layer)
                    'per_class_proposal': True, 'conf_thresh': 0.0,'quad_thresh':0.5,
                    'dataset_config': None} 
         
-    prefixes = ['proposal_'] + ['last_'] + [f'{i}head_' for i in range(num_layer-1)]
+    # Prepare layout categories
+    mask = semantic_labels == 1
+    mask = torch.bitwise_or(mask, semantic_labels == 8)
+    mask = torch.bitwise_or(mask, semantic_labels == 9)
+
+    # prefixes = ['proposal_'] + ['last_'] + [f'{i}head_' for i in range(num_layer-1)]
+    prefixes = ['last_']
+
+    import time
+    start = time.time()
 
     for prefix in prefixes:
         from models.ap_helper_pq import parse_quad_predictions
         batch_pred_map_cls, pred_mask, batch_pred_corners_list = parse_quad_predictions(end_points, CONFIG_DICT, prefix)
 
         for b in range(batch_size):
-    
+            
+            import warnings
+            warnings.filterwarnings('ignore')
+
             # Retrieve quads
             point_cloud, semantic_label = points[b], semantic_labels[b]
-            import IPython
-            IPython.embed(header="in training process, before calcing loss")
-            pred_corner = end_points['proposal_batch_pred_corners_list_tensor'][b]
+            pred_corner = end_points[f'{prefix}batch_pred_corners_list_tensor'][b]
 
+            # Prepare layout points
+            layout_point_mask = mask[b]
+            layout_point_cloud = point_cloud[layout_point_mask, :]
 
             # Calculate Distances
+            distance = calc_distance_vertically(point_cloud, pred_corner)
+            distance_layout = distance[layout_point_mask]
+
+            from fit import fit_gamma
+            filter_out_label = fit_gamma(torch.abs(distance_layout).detach().cpu().numpy())
 
             # Filter out points
+            keep_label = [not x for x in filter_out_label]
+            # keep_label = [True for x in range(distance_layout.shape[0])]
+            distance_left = distance_layout[keep_label]
 
             # Calculate distance loss and accumulate
+            distance_loss += torch.sum(torch.abs(distance_left))  # Use L1 Loss
 
-    lambda_distance = 0.50
-    return lambda_ 
-    pass
+    end = time.time()
+    print(f"Time consumption: {round(end-start, 2)}")  # ~10s if `last_` only
+    print(f"Distance Loss: {distance_loss}")
+
+    lambda_distance = 1e-3
+    return lambda_distance * distance_loss

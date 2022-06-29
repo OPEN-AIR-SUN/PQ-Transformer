@@ -466,4 +466,6 @@ def get_loss(end_points, config,query_points_obj_topk=5,pc_loss=True,num_layer =
 
 def get_loss_distance(end_points, config, query_points_obj_topk=5, pc_loss=False, num_layer=6):
     from models.utils.distance_util import distance_loss
-    return distance_loss(end_points, config, query_points_obj_topk, pc_loss, num_layer)
+    loss = distance_loss(end_points, config, query_points_obj_topk, pc_loss, num_layer)
+    end_points['loss'] = loss
+    return loss, end_points

@@ -27,7 +27,7 @@ class GammaDistribution(PDFunction):
 
     def __call__(self, t):
         a, b = self.params
-        return b**a / (sp.gamma(a)) * t**(a - 1) * np.e**(-b * t)
+        return b**a / (sp.gamma(a)) * np.e**(-b * t) * t**(a - 1) 
 
     def em_step(self, arr, prob):
         target = np.log((prob * arr).sum() / prob.sum()) - (prob * np.log(arr)).sum() / prob.sum()
@@ -110,8 +110,8 @@ class FitRunner:
 
 def fit_gamma(arr):
     arr = np.abs(arr)
-    a1, b1 = 2, 100
-    a2, b2 = 49, 100
+    a1, b1 = 2, 200
+    a2, b2 = 50, 50
     weight = 0.5
     dist_cls = GammaDistribution
     bins = 500

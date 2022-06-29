@@ -443,6 +443,7 @@ def parse_quad_predictions(end_points, config_dict, prefix=""):
         for j in range(pred_center.shape[1]):
             if pred_mask[i, j] == 1 and obj_prob[i, j] > config_dict['conf_thresh']:
                 batch_pred_map_cls_tensor[i].append((1, pred_corners_3d_upright_camera_tensor[i, j], obj_prob_tensor[i, j]))
+            if pred_mask[i, j] == 1 and obj_prob[i, j] > 0.5:
                 batch_pred_corners_list_tensor[i].append(pred_corners_tensor[i, j])
 
     end_points[f"{prefix}batch_pred_map_cls_tensor"] = batch_pred_map_cls_tensor
